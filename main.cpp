@@ -8,7 +8,6 @@
 #define WIDTH 1920
 #define HEIGHT 1080
 
-
 int max_iterations = 100;
 const double x_min = -2;
 const double x_max = 1;
@@ -18,6 +17,35 @@ const double y_max = 1;
 int num_cores = 0;
 
 static unsigned int *pixel_buffer = nullptr;
+
+#define PALETTE_SIZE 16
+
+uint32_t _bswap32(uint32_t a) {
+    return
+            ((a & 0x000000FF) << 24) |
+            ((a & 0x0000FF00) << 8) |
+            ((a & 0x00FF0000) >> 8) |
+            ((a & 0xFF000000) >> 24);
+}
+
+//creando vector. (16)
+std::vector<unsigned int> color_ramp = {
+        _bswap32(0xEF1019FF),
+        _bswap32(0xE01123FF),
+        _bswap32(0xD1112DFF),
+        _bswap32(0xC11237FF),
+        _bswap32(0xB21341FF),
+        _bswap32(0xA3134BFF),
+        _bswap32(0x931455FF),
+        _bswap32(0x84145EFF),
+        _bswap32(0x751568FF),
+        _bswap32(0x651672FF),
+        _bswap32(0x56167CFF),
+        _bswap32(0x471786FF),
+        _bswap32(0x371790FF),
+        _bswap32(0x28189AFF),
+        _bswap32(0x1919A4FF)
+};
 
 //class para que el compilador no dependa de algo externo
 enum class runtime_type_enum {
@@ -44,17 +72,14 @@ unsigned int divergente(double cx, double cy) {
         iter++;
     }
 
-    double op = vx * vx + vy * vy;
-    if (op > 4) {
-        return 0x00000000;
-    }
-
     if (iter > 0 && iter < max_iterations) {
         //diverge
-        return 0xFFFFFFFF;
+        int color_idx = iter % PALETTE_SIZE;
+        return color_ramp[color_idx]; //retorna color que necesitamos...
     } else {
         //converge
-        return 0xFF0000FF;
+//        return 0xFF0000FF;
+        return 0;
     }
 }
 
@@ -78,24 +103,59 @@ void mandelbrotCpu() {
     }
 }
 
+
 //usando pragma omp = OpenMp
 void mandelbrotOpenMp() {
+
     double dx = (x_max - x_min) / WIDTH;
     double dy = (y_max - y_min) / HEIGHT;
 
-    #pragma omp parallel for default(none) shared(dx, dy, pixel_buffer) num_threads(32)
-    for (int i = 0; i < WIDTH; i++) {
-        for (int j = 0; j < HEIGHT; j++) {
-            double x = x_min + i * dx;
-            double y = y_max - j * dy;
+#pragma omp parallel
+    {
+        int threads = omp_get_num_threads();
+        int id_threads = omp_get_thread_num();
 
-            // C = X+Yi
-            unsigned int color = divergente(x, y);
+        //i
+        int size_i = WIDTH / threads;
+        int start_i = id_threads * size_i;
+        int end_i = (1 + id_threads) * size_i;
 
-            pixel_buffer[j * WIDTH + i] = color;
+        if (id_threads == threads - 1) end_i = WIDTH;
 
+        //j
+        int size_j = HEIGHT / threads;
+        int start_j = id_threads * size_j;
+        int end_j = (1 + id_threads) * size_j;
+
+        if (id_threads == threads - 1) end_j = HEIGHT;
+
+        for (int i = start_i; i < end_i; i++) {
+            for (int j = start_j; j < end_j; j++) {
+
+                double x = x_min + i * dx;
+                double y = y_max - j * dy;
+                // C = X+Yi
+                unsigned int color = divergente(x, y);
+                pixel_buffer[j * WIDTH + i] = color;
+            }
         }
-    }
+
+    };
+
+//#pragma omp parallel for default(none) shared(dx, dy, pixel_buffer) num_threads(32)
+//
+//    for (int i = 0; i < WIDTH; i++) {
+//        for (int j = 0; j < HEIGHT; j++) {
+//            double x = x_min + i * dx;
+//            double y = y_max - j * dy;
+//
+//            // C = X+Yi
+//            unsigned int color = divergente(x, y);
+//
+//            pixel_buffer[j * WIDTH + i] = color;
+//
+//        }
+//    }
 }
 
 int main() {
@@ -105,7 +165,7 @@ int main() {
     pixel_buffer = new unsigned int[WIDTH * HEIGHT];
 
     {
-//        font.loadFromFile("arial.ttf");
+        font.loadFromFile("arial.ttf");
         text.setFont(font);
         text.setString("Ejemplo OPENMP");
         text.setCharacterSize(24);
@@ -139,13 +199,12 @@ int main() {
     int frames = 0;
     int fps = 0;
 
+#pragma omp parallel
+    {
+        num_cores = omp_get_num_threads();
+    }
     //siempre va estar abierto
     while (window.isOpen()) {
-//        for (auto event = sf::Event{}; window.pollEvent(event);) {
-//            if (event.type == sf::Event::Closed) {
-//                window.close();
-//            }
-//        }
         sf::Event event;
         while (window.pollEvent(event))
             if (event.type == sf::Event::Closed) {
@@ -156,7 +215,7 @@ int main() {
                 switch (event.key.scancode) {
                     case sf::Keyboard::Scan::Num1:
                         //cpu
-                    #pragma omp master
+#pragma omp master
                     {
                         num_cores = omp_get_num_threads();
                     }
@@ -164,7 +223,7 @@ int main() {
                         break;
                     case sf::Keyboard::Scan::Num2:
                         //openMp
-                    #pragma omp parallel
+#pragma omp parallel
                     {
                         num_cores = omp_get_num_threads();
                     }
@@ -189,8 +248,8 @@ int main() {
         // formatear el texto
 //        auto msg = fmt :: format("Ejemplo OpenMP, FPS: {}", fps);
 //        text.setString(msg);
-        auto msg = fmt::format("MANDELBROT SET::Mode={}, FPS:{}, Cores: {}",
-                               runtime_type == runtime_type_enum::rtCPU ? "CPU" : "OpenMp", fps, num_cores);
+        std::string msg = fmt::format("MANDELBROT SET::Mode={}, FPS:{}, Cores: {}",
+                                      runtime_type == runtime_type_enum::rtCPU ? "CPU" : "OpenMp", fps, num_cores);
         text.setString(msg);
 
         if (clock.getElapsedTime().asSeconds() >= 1.0) {
