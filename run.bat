@@ -1,0 +1,1 @@
+"C:/Program Files (x86)/Intel/oneAPI/mpi/latest/bin/mpiexec.exe" -n 6 cmake-build-debug/ejemplo02_mpi.exe

@@ -1,0 +1,5 @@
+"C:\Program Files\JetBrains\CLion 2024.1.1\bin\cmake\win\x64\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_MAKE_PROGRAM=C:/Program Files/JetBrains/CLion 2024.1.1/bin/ninja/win/x64/ninja.exe" -G Ninja -S C:\Users\carlo\CLionProjects\ejemplo02_mpi -B C:\Users\carlo\CLionProjects\ejemplo02_mpi\cmake-build-debug
+-- Run C:/Program Files (x86)/Intel/oneAPI/mpi/latest/bin/mpiexec.exe -n 6
+-- Configuring done (1.9s)
+-- Generating done (0.0s)
+-- Build files have been written to: C:/Users/carlo/CLionProjects/ejemplo02_mpi/cmake-build-debug
